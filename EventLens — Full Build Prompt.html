@@ -1,0 +1,360 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>EventLens — Full Build Prompt</h1>
+<p>Use this as a spec to hand to a coding assistant (Claude Code, Cursor, etc.) or to work through yourself, feature by feature.</p>
+<hr>
+<h2>1. Project Summary</h2>
+<p>Build <strong>EventLens</strong>, an AI-powered event photo delivery platform for event photographers (weddings, corporate events, sports, schools) in India. Guests scan a QR code, take a selfie, and instantly get every photo they appear in via a face-matched gallery — delivered over web and WhatsApp. Photographers pay <strong>per event</strong>, not a yearly subscription.</p>
+<p><strong>Core differentiators to build in from day one:</strong></p>
+<ul>
+<li>Per-event pricing (not subscription)</li>
+<li>WhatsApp-native delivery (not just a web app)</li>
+<li>Offline-capable desktop uploader for bad-wifi venues</li>
+<li>Auto-expiring data lifecycle (privacy + cost control)</li>
+<li>Lean infra: single VPS, Cloudflare R2, Postgres+pgvector (no Redis, no managed vector DB)</li>
+</ul>
+<hr>
+<h2>2. Tech Stack</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frontend</td>
+<td>Next.js (App Router) + Tailwind CSS</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>Python FastAPI</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL + pgvector extension</td>
+</tr>
+<tr>
+<td>Job queue</td>
+<td>pg-boss (Postgres-native, no Redis)</td>
+</tr>
+<tr>
+<td>Object storage</td>
+<td>Cloudflare R2 (zero egress fees)</td>
+</tr>
+<tr>
+<td>CDN/Edge</td>
+<td>Cloudflare Pages + WAF</td>
+</tr>
+<tr>
+<td>Face detection/embedding</td>
+<td>InsightFace (ONNX Runtime), CPU for search, spot GPU during LIVE events</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>Razorpay (Orders API + webhooks, Route for splits later)</td>
+</tr>
+<tr>
+<td>Messaging</td>
+<td>WhatsApp Business Cloud API (or Gupshup/Interakt as BSP)</td>
+</tr>
+<tr>
+<td>Desktop uploader</td>
+<td>Tauri (Rust + web frontend)</td>
+</tr>
+<tr>
+<td>Hosting</td>
+<td>Single Hetzner VPS for API + worker; Cloudflare for frontend/edge/storage</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>3. Design System — Light Theme</h2>
+<p>Build a clean, warm, trustworthy visual identity — this is a product handling people's wedding/family memories, so avoid a cold &quot;SaaS dashboard&quot; feel.</p>
+<p><strong>Palette:</strong></p>
+<ul>
+<li>Background: <code>#FAFAF8</code> (warm off-white, not pure white)</li>
+<li>Surface/cards: <code>#FFFFFF</code> with soft shadow (<code>0 2px 12px rgba(0,0,0,0.06)</code>)</li>
+<li>Primary accent: <code>#4F46E5</code> (indigo) or a warm coral <code>#F97362</code> — pick one as the brand color, use sparingly</li>
+<li>Text primary: <code>#1A1A1A</code></li>
+<li>Text secondary: <code>#6B7280</code></li>
+<li>Border: <code>#E5E7EB</code></li>
+<li>Success (LIVE/ACTIVE states): <code>#22C55E</code></li>
+<li>Warning (ARCHIVED): <code>#F59E0B</code></li>
+<li>Danger (DELETED): <code>#EF4444</code></li>
+</ul>
+<p><strong>Typography:</strong></p>
+<ul>
+<li>Headings: a rounded/friendly sans (e.g. &quot;Cal Sans&quot;, &quot;Sora&quot;, or &quot;Plus Jakarta Sans&quot;)</li>
+<li>Body: &quot;Inter&quot; or &quot;Manrope&quot;</li>
+<li>Generous line-height (1.6+) for readability on mobile — most guests will open galleries on phones</li>
+</ul>
+<p><strong>Components to design consistently:</strong></p>
+<ul>
+<li>Rounded corners (12–16px) throughout — cards, buttons, inputs</li>
+<li>Soft shadows instead of hard borders for depth</li>
+<li>Status pills for event lifecycle (Created/Live/Active/Archived/Deleted) using the color tokens above</li>
+<li>Photo grid: masonry or square-crop grid with lazy-loaded thumbnails, subtle hover zoom</li>
+<li>Empty states with friendly illustration/icon, not blank screens</li>
+<li>Mobile-first for all guest-facing pages (gallery, selfie capture, payment) — desktop-first only for the photographer dashboard</li>
+</ul>
+<p><strong>Key screens to design:</strong></p>
+<ol>
+<li>Landing/marketing page</li>
+<li>Photographer sign-up/login</li>
+<li>Photographer dashboard (event list with status pills, storage used, quick QR download)</li>
+<li>Create event flow (name, date, plan/size selection, Razorpay checkout)</li>
+<li>Event detail page (upload photos, view stats, guest count, gallery link, QR code, archive/renew controls)</li>
+<li>Public guest gallery (browse all photos, &quot;Find my photos&quot; selfie CTA)</li>
+<li>Selfie capture screen (camera permission, capture, processing state, matched results grid)</li>
+<li>Payment/checkout screen (if photo-selling enabled)</li>
+<li>WhatsApp opt-in confirmation screen</li>
+</ol>
+<hr>
+<h2>4. Database Schema (Postgres + pgvector)</h2>
+<pre><code class="language-sql">CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE photographers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  password_hash TEXT NOT NULL,
+  business_name TEXT,
+  razorpay_account_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TYPE event_status AS ENUM (&#39;created&#39;,&#39;live&#39;,&#39;active&#39;,&#39;archived&#39;,&#39;deleted&#39;);
+
+CREATE TABLE events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  photographer_id UUID REFERENCES photographers(id),
+  name TEXT NOT NULL,
+  event_date DATE,
+  status event_status DEFAULT &#39;created&#39;,
+  plan_tier TEXT,
+  storage_limit_mb INT,
+  storage_used_mb INT DEFAULT 0,
+  qr_code_url TEXT,
+  face_search_enabled BOOLEAN DEFAULT true,
+  archived_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE photos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  r2_key_original TEXT,
+  r2_key_web TEXT,
+  r2_key_thumb TEXT,
+  width INT,
+  height INT,
+  face_processed BOOLEAN DEFAULT false,
+  uploaded_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE guests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  phone_number TEXT,
+  whatsapp_opt_in BOOLEAN DEFAULT false,
+  selfie_embedding vector(512),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE face_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  photo_id UUID REFERENCES photos(id) ON DELETE CASCADE,
+  embedding vector(512),
+  bbox JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON face_embeddings USING ivfflat (embedding vector_cosine_ops);
+
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id),
+  razorpay_order_id TEXT,
+  razorpay_payment_id TEXT,
+  amount_paise INT,
+  status TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+</code></pre>
+<hr>
+<h2>5. Backend API Endpoints (FastAPI)</h2>
+<p><strong>Auth</strong></p>
+<ul>
+<li><code>POST /auth/signup</code></li>
+<li><code>POST /auth/login</code></li>
+<li><code>POST /auth/refresh</code></li>
+</ul>
+<p><strong>Events</strong></p>
+<ul>
+<li><code>POST /events</code> — create event (status=created, triggers Razorpay order)</li>
+<li><code>GET /events</code> — list photographer's events</li>
+<li><code>GET /events/{id}</code> — event detail + stats</li>
+<li><code>PATCH /events/{id}</code> — update status (archive/renew/go-live)</li>
+<li><code>POST /events/{id}/qr</code> — generate/fetch QR code</li>
+</ul>
+<p><strong>Uploads</strong></p>
+<ul>
+<li><code>POST /events/{id}/photos/presign</code> — return presigned R2 upload URL(s)</li>
+<li><code>POST /events/{id}/photos/confirm</code> — mark photo uploaded, enqueue face job</li>
+</ul>
+<p><strong>Guest-facing</strong></p>
+<ul>
+<li><code>GET /events/{id}/gallery</code> — paginated public gallery</li>
+<li><code>POST /events/{id}/selfie-search</code> — accept selfie image, return embedding match, list photo URLs</li>
+<li><code>POST /events/{id}/guests</code> — register guest (phone + WhatsApp opt-in)</li>
+</ul>
+<p><strong>Payments</strong></p>
+<ul>
+<li><code>POST /payments/create-order</code></li>
+<li><code>POST /payments/webhook</code> — Razorpay webhook, verify signature, update event status</li>
+</ul>
+<p><strong>WhatsApp</strong></p>
+<ul>
+<li><code>POST /whatsapp/webhook</code> — inbound messages (if doing bot-based selfie intake)</li>
+<li>Internal function: <code>send_gallery_ready_notification(guest, event)</code></li>
+</ul>
+<p><strong>Internal/worker</strong></p>
+<ul>
+<li><code>POST /internal/face-jobs/{photo_id}</code> — pg-boss job handler, calls face worker</li>
+</ul>
+<hr>
+<h2>6. Face Worker — Custom-Trained Model (built on the InsightFace framework)</h2>
+<p>Instead of calling InsightFace's pretrained <code>buffalo_l</code>/<code>antelope</code> models as a black box, train your <strong>own</strong> recognition model using InsightFace's open-source training code (<code>github.com/deepinsight/insightface</code>, <code>recognition/arcface_torch</code>), so the embedding model is yours end-to-end.</p>
+<h3>6.1 Why train your own, and the one thing to get right first</h3>
+<p>InsightFace's <em>code</em> (MIT licensed) is free for commercial use. Its <em>pretrained models and the standard training datasets</em> (MS1M, VGG2, CASIA-WebFace) are released for <strong>non-commercial research only</strong>. So before training anything:</p>
+<ul>
+<li>Do <strong>not</strong> ship a model fine-tuned from their pretrained checkpoints, or trained on MS1M/VGG2/CASIA, in a paid product without separately checking licensing.</li>
+<li>Build your training set from <strong>commercially-licensed or self-collected/consented face data</strong> (e.g. a licensed dataset like Glint360K's commercially-clear subsets where available, purchased datasets, or — more realistically for a v1 — a smaller curated/consented dataset plus heavy augmentation). Document this decision in your repo so it's auditable later.</li>
+<li>Alternative if you want to de-risk this fast: start with the <strong>architecture and training code</strong> from InsightFace (ArcFace loss + IResNet backbone) but train from scratch or from a commercially-clean checkpoint, rather than their released weights.</li>
+</ul>
+<h3>6.2 Pipeline components (map to InsightFace repo structure)</h3>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>InsightFace component</th>
+<th>Your use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Face detection + alignment</td>
+<td><code>detection/scrfd</code> (SCRFD) or RetinaFace</td>
+<td>Detect faces in uploaded event photos, output 5-point landmarks for alignment</td>
+</tr>
+<tr>
+<td>Face recognition (embedding)</td>
+<td><code>recognition/arcface_torch</code></td>
+<td>Train your own ArcFace-loss embedding model</td>
+</tr>
+<tr>
+<td>Backbone</td>
+<td>IResNet50 (accuracy) or MobileFaceNet (speed, CPU-friendly)</td>
+<td>Pick IResNet50 for server-side search accuracy; consider MobileFaceNet if you ever run on-device</td>
+</tr>
+<tr>
+<td>Loss</td>
+<td>ArcFace / SubCenter-ArcFace / PartialFC</td>
+<td>ArcFace to start; PartialFC if your identity count grows very large (irrelevant at per-event scale, useful only if you later train one global model across users)</td>
+</tr>
+<tr>
+<td>Export</td>
+<td>ONNX export scripts included in <code>arcface_torch</code></td>
+<td>Export trained <code>.pth</code> → <code>.onnx</code> for fast CPU inference in the worker</td>
+</tr>
+</tbody>
+</table>
+<h3>6.3 Training prompt (use this as the actual build task)</h3>
+<blockquote>
+<p>Set up a face recognition training pipeline using the InsightFace <code>arcface_torch</code> codebase from <code>github.com/deepinsight/insightface</code>. Requirements:</p>
+<ol>
+<li>Clone <code>recognition/arcface_torch</code>, set up the PyTorch 1.6+ environment as specified in the repo.</li>
+<li>Build a training dataset in the MXNet <code>.rec</code>/<code>.idx</code> binary format (or their newer loader format) from [your chosen commercially-clean dataset / self-collected consented dataset]. Include a held-out validation split.</li>
+<li>Configure <code>config.py</code> with backbone <code>r50</code> (IResNet50), loss <code>arcface</code>, margin 0.5, scale 64 — standard ArcFace hyperparameters — and point it at the new dataset.</li>
+<li>Train on GPU (rent a cloud GPU instance for the training run only — don't keep GPU always-on), monitor verification accuracy on your held-out set plus public benchmarks (LFW, AgeDB-30, CFP-FP) if licensing allows using them for eval only.</li>
+<li>Once validation accuracy plateaus, export the model to ONNX using the repo's export script.</li>
+<li>Wrap the ONNX model in an inference class using <code>onnxruntime</code> (CPU provider by default, CUDA provider when a GPU is available) that takes an aligned face crop and returns a 512-dim L2-normalized embedding.</li>
+<li>For detection/alignment, integrate SCRFD (also from the InsightFace repo) as a separate lightweight ONNX model — this does NOT need custom training, it's fine to use as-is since it's just bounding boxes/landmarks, not identity data.</li>
+<li>Benchmark end-to-end latency (detect + align + embed) per photo on the target VPS CPU; if too slow for batch processing during LIVE events, that's when you provision the spot GPU.</li>
+</ol>
+</blockquote>
+<h3>6.4 Worker service logic (unchanged regardless of model source)</h3>
+<ul>
+<li>Runs as a separate process/service, pulls jobs from pg-boss queue</li>
+<li>On each job: download photo from R2 → run SCRFD detection + alignment → for each face, run your custom-trained ONNX embedding model → insert 512-dim vector into <code>face_embeddings</code> with bbox</li>
+<li>On selfie search: embed the guest selfie the same way → <code>SELECT photo_id FROM face_embeddings ORDER BY embedding &lt;-&gt; $1 LIMIT 100</code> filtered by cosine distance threshold (tune empirically against your own model's distribution — thresholds from InsightFace's published models won't transfer directly to a custom-trained model, so calibrate on your validation set)</li>
+<li>Batch processing during LIVE events: spin up GPU (spot instance) only while an event is actively uploading; fall back to CPU (ONNX Runtime CPU provider) for low-volume/steady-state search</li>
+<li>Version your model artifact (<code>model_v1.onnx</code>, <code>model_v2.onnx</code>) and store which version generated each embedding, since re-training later means old and new embeddings aren't comparable — you'll need a re-indexing migration path when you ship a new model version</li>
+</ul>
+<hr>
+<h2>7. WhatsApp Integration</h2>
+<ul>
+<li>Use WhatsApp Business Cloud API directly, or a BSP (Gupshup/Interakt) for faster approval</li>
+<li><strong>Phase 1 (build first):</strong> template message notification — &quot;Your photos from [Event] are ready: [link]&quot; sent when guest is matched and event photos are processed</li>
+<li><strong>Phase 2:</strong> inbound selfie via WhatsApp — guest sends a photo of themselves to the business number, webhook receives it, runs same selfie-search pipeline, replies with matched photo links or a gallery deep-link</li>
+<li>Get WhatsApp template messages pre-approved (Meta requires this) before launch — start this early, approval can take days</li>
+</ul>
+<hr>
+<h2>8. Payments (Razorpay) — Per-Event Model</h2>
+<ul>
+<li>On event creation, calculate price based on <code>plan_tier</code> (storage tier chosen)</li>
+<li>Create Razorpay Order, return <code>order_id</code> to frontend, open Razorpay Checkout</li>
+<li>On success, Razorpay webhook fires → verify signature → set event status to <code>live</code>, set storage_limit_mb</li>
+<li>Track storage usage on each photo upload; block further uploads and prompt upgrade if <code>storage_used_mb</code> exceeds limit</li>
+<li>If enabling photo-selling to guests later: separate checkout flow per photo/album, use Razorpay Route to split proceeds if multiple photographers on one event</li>
+</ul>
+<hr>
+<h2>9. Event Lifecycle Automation</h2>
+<p>Scheduled job (pg-boss cron or a simple daily cron):</p>
+<ol>
+<li><code>live</code> → <code>active</code>: triggered manually by photographer (&quot;End Event&quot;) or automatically N days after <code>event_date</code></li>
+<li><code>active</code> → <code>archived</code>: after configurable retention window (default 30 days) — delete <code>r2_key_original</code> and <code>r2_key_web</code>, keep <code>r2_key_thumb</code> only</li>
+<li><code>archived</code> → <code>deleted</code>: after further window (default 60 days total) — delete all R2 objects, delete rows from <code>face_embeddings</code> and <code>guests.selfie_embedding</code></li>
+<li><code>renew</code>: photographer can pay again to reset the archive timer and restore full-res access before deletion happens</li>
+</ol>
+<p>Surface all of this clearly in the dashboard with countdown timers so photographers aren't surprised by auto-deletion.</p>
+<hr>
+<h2>10. Non-Functional Requirements</h2>
+<ul>
+<li><strong>Security:</strong> rate-limit <code>/selfie-search</code> aggressively (per-IP + per-event); presigned URLs short-lived (15 min); JWT auth with refresh tokens; validate file types/sizes on upload</li>
+<li><strong>Privacy:</strong> explicit opt-in checkbox before selfie capture, clear copy on what happens to face data and when it's deleted; &quot;browse without selfie&quot; always available as an alternative</li>
+<li><strong>Performance:</strong> thumbnails served from Cloudflare cache; lazy-load gallery grids; presigned direct-to-R2 uploads (never proxy image bytes through the API server)</li>
+<li><strong>Compliance:</strong> DPDP Act-aware consent language; publish a simple privacy page explaining biometric data handling and deletion timelines</li>
+</ul>
+<hr>
+<h2>11. Build Order (Recap)</h2>
+<ol>
+<li>Postgres schema + FastAPI auth + event CRUD</li>
+<li>R2 presigned upload + Next.js upload page + public gallery (no AI)</li>
+<li>Face worker as standalone script → wire into pg-boss</li>
+<li>Selfie search endpoint + frontend capture flow</li>
+<li>Razorpay checkout + webhook → per-event billing live</li>
+<li>WhatsApp &quot;photos ready&quot; notifications</li>
+<li>Lifecycle cron automation (archive/delete/renew)</li>
+<li>Tauri desktop uploader with offline queue</li>
+<li>WhatsApp inbound selfie bot, live slideshow mode, multi-day sub-galleries, consent-gated school mode</li>
+</ol>
+<hr>
+<h2>12. Deliverables Checklist</h2>
+<ul>
+<li><input disabled="" type="checkbox"> Landing page + light-theme design system implemented in Tailwind config</li>
+<li><input disabled="" type="checkbox"> Photographer auth + dashboard</li>
+<li><input disabled="" type="checkbox"> Event creation + Razorpay checkout</li>
+<li><input disabled="" type="checkbox"> Presigned R2 upload pipeline</li>
+<li><input disabled="" type="checkbox"> Face detection worker + pgvector search</li>
+<li><input disabled="" type="checkbox"> Guest selfie capture + matched gallery</li>
+<li><input disabled="" type="checkbox"> WhatsApp notification integration</li>
+<li><input disabled="" type="checkbox"> Lifecycle automation cron jobs</li>
+<li><input disabled="" type="checkbox"> Privacy/consent copy + DPDP-aware policy page</li>
+<li><input disabled="" type="checkbox"> Desktop uploader (Tauri) — stretch goal for v1</li>
+</ul>
+
+</body></html>

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 16 with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: eventlens_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: eventlens
+      POSTGRES_USER: eventlens
+      POSTGRES_PASSWORD: eventlens_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventlens -d eventlens"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend API & In-Process Face Worker
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eventlens_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://eventlens:eventlens_secure_password@postgres:5432/eventlens
+      - SECRET_KEY=replace_with_a_super_secret_64_character_random_key_here
+      # Cloudflare R2 Credentials
+      - R2_ENDPOINT_URL=https://<your_account_id>.r2.cloudflarestorage.com
+      - R2_ACCESS_KEY_ID=<your_r2_access_key>
+      - R2_SECRET_ACCESS_KEY=<your_r2_secret_key>
+      - R2_BUCKET_NAME=eventlens-media
+      - R2_PUBLIC_URL=https://media.eventlens.in
+      # Razorpay Gateway
+      - RAZORPAY_KEY_ID=<your_razorpay_key_id>
+      - RAZORPAY_KEY_SECRET=<your_razorpay_key_secret>
+      # WhatsApp Business Cloud API
+      - WHATSAPP_API_TOKEN=<your_whatsapp_token>
+      - WHATSAPP_PHONE_NUMBER_ID=<your_phone_id>
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

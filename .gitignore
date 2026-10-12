@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Next.js Build
+.next/
+out/
+build/
+dist/
+
+# SQLite & local DB
+*.db
+*.sqlite3
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+.pytest_cache/
