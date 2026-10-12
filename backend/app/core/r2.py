@@ -3,6 +3,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.core.config import settings
 import logging
+import os
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,12 @@ class R2StorageService:
         self.secret_key = settings.R2_SECRET_ACCESS_KEY
         self.bucket_name = settings.R2_BUCKET_NAME
         self.public_url = settings.R2_PUBLIC_URL.rstrip('/')
+        
+        # Local storage directory fallback (inside backend/uploads)
+        self.local_dir = os.path.abspath(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+        )
+        os.makedirs(self.local_dir, exist_ok=True)
         
         self.is_configured = bool(
             self.endpoint_url 
@@ -33,17 +40,21 @@ class R2StorageService:
                     config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
                 )
             except Exception as e:
-                logger.warning(f"Could not initialize S3 client with configured endpoint ({e}). Local fallback mode enabled.")
+                logger.warning(f"Could not initialize S3 client with configured endpoint ({e}). Local folder storage mode enabled.")
                 self.s3_client = None
                 self.is_configured = False
         else:
             self.s3_client = None
-            logger.warning("R2 storage credentials not configured or placeholder detected. Local fallback mode enabled.")
+            logger.info(f"R2 credentials not set. Saving all uploaded photos locally in: {self.local_dir}")
+
+    def _get_local_path(self, key: str) -> str:
+        safe_key = key.lstrip("/").replace("/", os.sep)
+        return os.path.join(self.local_dir, safe_key)
 
     def generate_presigned_put_url(self, key: str, content_type: str = "image/jpeg", expires_in: int = 900) -> str:
         """Generate a presigned PUT URL for direct client-to-R2 upload (15 min default expiry)."""
         if not self.is_configured:
-            # Return a development simulated upload URL
+            # Return development local upload URL
             return f"http://localhost:8000/api/v1/dev-upload?key={key}"
             
         try:
@@ -62,20 +73,29 @@ class R2StorageService:
             raise e
 
     def get_public_url(self, key: str) -> str:
-        """Returns the public CDN / direct URL for an R2 key."""
+        """Returns the public CDN / direct URL for an R2 key or local media URL."""
         if not key:
             return ""
         if key.startswith("http://") or key.startswith("https://"):
             return key
-        if self.public_url:
+        if self.is_configured and self.public_url:
             return f"{self.public_url}/{key}"
-        return f"/media/{key}"
+        # Local folder serving via FastAPI StaticFiles
+        return f"http://localhost:8000/media/{key}"
 
     def upload_bytes(self, key: str, data: bytes, content_type: str = "image/webp") -> bool:
-        """Upload raw bytes (e.g. generated web/thumb variants) to R2."""
+        """Upload raw bytes to R2 or write directly to local folder."""
         if not self.is_configured:
-            logger.info(f"[Dev Mock] Simulated R2 upload: {key} ({len(data)} bytes)")
-            return True
+            try:
+                dest = self._get_local_path(key)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as f:
+                    f.write(data)
+                logger.info(f"[Local Storage] Saved file to disk: {dest} ({len(data)} bytes)")
+                return True
+            except Exception as e:
+                logger.error(f"Error writing file to local disk {key}: {e}")
+                return False
             
         try:
             self.s3_client.put_object(
@@ -90,12 +110,36 @@ class R2StorageService:
             logger.error(f"Error uploading bytes to R2 key {key}: {e}")
             return False
 
+    def get_bytes(self, key: str) -> Optional[bytes]:
+        """Reads raw bytes for a key from local storage or R2."""
+        if not self.is_configured:
+            dest = self._get_local_path(key)
+            if os.path.exists(dest):
+                try:
+                    with open(dest, "rb") as f:
+                        return f.read()
+                except Exception as e:
+                    logger.error(f"Error reading local file {dest}: {e}")
+            return None
+        try:
+            resp = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
+            return resp["Body"].read()
+        except Exception as e:
+            logger.error(f"Error fetching R2 object {key}: {e}")
+            return None
+
     def delete_objects(self, keys: List[str]) -> bool:
-        """Delete multiple objects from R2 (e.g. for lifecycle cleanup)."""
+        """Delete multiple objects from R2 or local disk."""
         if not keys:
             return True
         if not self.is_configured:
-            logger.info(f"[Dev Mock] Simulated R2 deletion: {len(keys)} keys")
+            for k in keys:
+                p = self._get_local_path(k)
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
             return True
             
         try:
@@ -107,10 +151,10 @@ class R2StorageService:
             return False
 
     def head_object(self, key: str) -> bool:
-        """Verifies if an object actually exists in R2 storage."""
+        """Verifies if an object actually exists in R2 or local folder."""
         if not self.is_configured:
-            # In local dev simulation, accept key
-            return True
+            dest = self._get_local_path(key)
+            return os.path.exists(dest)
         try:
             self.s3_client.head_object(Bucket=self.bucket_name, Key=key)
             return True
@@ -122,9 +166,9 @@ class R2StorageService:
             return False
 
     def test_connection(self) -> bool:
-        """Tests connectivity to R2 bucket for health check."""
+        """Tests connectivity to R2 bucket or local directory."""
         if not self.is_configured:
-            return True
+            return os.path.exists(self.local_dir)
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
             return True

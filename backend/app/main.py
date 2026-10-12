@@ -102,11 +102,17 @@ async def health_check():
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
     return payload
 
+from fastapi.staticfiles import StaticFiles
+app.mount("/media", StaticFiles(directory=r2_storage.local_dir), name="media")
+
 @app.put("/api/v1/dev-upload", tags=["Development"])
 async def dev_simulated_upload(request: Request, key: str):
-    """Simulates direct S3/R2 PUT upload when running locally without active R2 credentials."""
+    """Saves direct PUT photo uploads to the local backend/uploads directory."""
     body = await request.body()
-    logger.info(f"[Dev Mock R2 Upload] Received {len(body)} bytes for key: {key}")
+    success = r2_storage.upload_bytes(key, body)
+    if not success:
+        return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    logger.info(f"[Local Upload] Successfully saved {len(body)} bytes for key: {key}")
     return Response(status_code=status.HTTP_200_OK)
 
 if __name__ == "__main__":

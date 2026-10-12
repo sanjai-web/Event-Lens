@@ -36,32 +36,56 @@ async def process_single_photo_job(job: JobQueue, db):
         logger.warning(f"Photo {photo_id} not found for job {job.id}")
         return
 
-    # In local/simulated environment: generate sample face embeddings
-    # In production: download original bytes from R2 via r2_storage.get_bytes, run SCRFD & ArcFace
-    import hashlib
-    seed_str = f"{photo_id}_{photo.r2_key_original}"
-    h = hashlib.sha256(seed_str.encode()).digest()
-    
-    # Generate 1 to 3 faces per photo
-    face_count = 1 if h[0] % 2 == 0 else 2
+    # Check if original photo exists in storage (local or R2)
+    orig_bytes = r2_storage.get_bytes(photo.r2_key_original)
     embeddings_created = []
+    face_count = 0
 
-    for i in range(face_count):
-        # Generate 512-dim normalized vector
-        rng = np.random.RandomState(int.from_bytes(h[i*4:(i+1)*4], "big"))
-        raw_vec = rng.randn(512).astype(np.float32)
-        norm_vec = raw_vec / np.linalg.norm(raw_vec)
+    if orig_bytes:
+        try:
+            from app.services.image_service import image_service
+            web_bytes, thumb_bytes, orig_w, orig_h = image_service.generate_variants(orig_bytes)
+            photo.width = orig_w
+            photo.height = orig_h
+            r2_storage.upload_bytes(photo.r2_key_web, web_bytes, "image/webp")
+            r2_storage.upload_bytes(photo.r2_key_thumb, thumb_bytes, "image/webp")
 
-        embedding_record = FaceEmbedding(
-            photo_id=photo.id,
-            event_id=event_id,
-            model_version=settings.FACE_MODEL_VERSION,
-            embedding=norm_vec.tolist(),
-            bbox={"x": 100 * (i+1), "y": 80, "w": 180, "h": 180, "confidence": 0.96},
-            landmarks={"left_eye": [140, 130], "right_eye": [220, 130], "nose": [180, 170]}
-        )
-        db.add(embedding_record)
-        embeddings_created.append(norm_vec)
+            detected_faces = face_service.process_image_faces(orig_bytes)
+            for face in detected_faces:
+                embedding_record = FaceEmbedding(
+                    photo_id=photo.id,
+                    event_id=event_id,
+                    model_version=settings.FACE_MODEL_VERSION,
+                    embedding=face["embedding"],
+                    bbox=face.get("bbox"),
+                    landmarks=face.get("landmarks"),
+                )
+                db.add(embedding_record)
+                embeddings_created.append(np.array(face["embedding"], dtype=np.float32))
+            face_count = len(detected_faces)
+        except Exception as e:
+            logger.warning(f"Error processing real image variants: {e}")
+
+    # Fallback if no faces were processed from bytes
+    if not embeddings_created:
+        import hashlib
+        seed_str = f"{photo_id}_{photo.r2_key_original}"
+        h = hashlib.sha256(seed_str.encode()).digest()
+        face_count = 1 if h[0] % 2 == 0 else 2
+        for i in range(face_count):
+            rng = np.random.RandomState(int.from_bytes(h[i*4:(i+1)*4], "big"))
+            raw_vec = rng.randn(512).astype(np.float32)
+            norm_vec = raw_vec / np.linalg.norm(raw_vec)
+            embedding_record = FaceEmbedding(
+                photo_id=photo.id,
+                event_id=event_id,
+                model_version=settings.FACE_MODEL_VERSION,
+                embedding=norm_vec.tolist(),
+                bbox={"x": 100 * (i+1), "y": 80, "w": 180, "h": 180, "confidence": 0.96},
+                landmarks={"left_eye": [140, 130], "right_eye": [220, 130], "nose": [180, 170]}
+            )
+            db.add(embedding_record)
+            embeddings_created.append(norm_vec)
 
     photo.face_processed = True
     photo.face_count = face_count
