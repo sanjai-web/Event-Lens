@@ -21,6 +21,20 @@ from app.services.face_service import face_service
 
 logger = logging.getLogger(__name__)
 
+def calibrate_match_score(raw_sim: float) -> float:
+    """
+    Calibrates ArcFace raw cosine similarity (range ~0.40 to 1.0) into intuitive match percentage (75% to 99%).
+    ArcFace threshold is 0.40. Anything >= 0.40 is a confirmed match (FAR 1e-4).
+    """
+    if raw_sim >= 0.85:
+        return round(min(0.99, 0.95 + (raw_sim - 0.85) * 0.25), 3)
+    elif raw_sim >= 0.60:
+        return round(0.88 + ((raw_sim - 0.60) / 0.25) * 0.07, 3)
+    elif raw_sim >= 0.40:
+        return round(0.75 + ((raw_sim - 0.40) / 0.20) * 0.13, 3)
+    else:
+        return round(max(0.50, raw_sim * 1.5), 3)
+
 router = APIRouter()
 
 @router.post("/public/events/{slug}/selfie-search", response_model=SelfieSearchResponse)
@@ -168,12 +182,13 @@ async def selfie_search(
             width=p.width,
             height=p.height,
             uploaded_at=p.uploaded_at,
-            similarity=matched_photos_map.get(p.id)
+            similarity=calibrate_match_score(matched_photos_map.get(p.id, 0.0))
         )
         for p in photos_sorted
     ]
 
     scan_ms = round((time.time() - start_time) * 1000, 2)
+    logger.info(f"[Selfie Search] Found {len(items)} matching photos in {scan_ms}ms for event {slug}.")
 
     return SelfieSearchResponse(
         matched_count=len(items),

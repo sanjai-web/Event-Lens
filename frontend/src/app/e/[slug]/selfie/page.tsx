@@ -37,6 +37,7 @@ export default function SelfieCapturePage() {
   const [consentShake, setConsentShake] = useState(false);
 
   // File upload state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedFilePreview, setUploadedFilePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -112,13 +113,21 @@ export default function SelfieCapturePage() {
     setCapturedPreview(base64Data);
     stopCamera();
 
-    await performSearch(base64Data);
+    // Convert canvas to Blob for fast binary streaming
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        await performSearch(blob);
+      } else {
+        await performSearch(base64Data);
+      }
+    }, "image/jpeg", 0.92);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadedFile(file);
     const reader = new FileReader();
     reader.onload = (event) => {
       const b64 = event.target?.result as string;
@@ -132,6 +141,7 @@ export default function SelfieCapturePage() {
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("image/")) {
+      setUploadedFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         const b64 = event.target?.result as string;
@@ -146,10 +156,17 @@ export default function SelfieCapturePage() {
       triggerConsentAlert();
       return;
     }
-    if (!uploadedFilePreview) return;
+    if (!uploadedFile && !uploadedFilePreview) return;
 
-    setCapturedPreview(uploadedFilePreview);
-    await performSearch(uploadedFilePreview);
+    if (uploadedFilePreview) {
+      setCapturedPreview(uploadedFilePreview);
+    }
+
+    if (uploadedFile) {
+      await performSearch(uploadedFile);
+    } else if (uploadedFilePreview) {
+      await performSearch(uploadedFilePreview);
+    }
   };
 
   const triggerConsentAlert = () => {
@@ -157,11 +174,17 @@ export default function SelfieCapturePage() {
     setTimeout(() => setConsentShake(false), 2000);
   };
 
-  const performSearch = async (base64Image: string) => {
+  const performSearch = async (imageInput: File | Blob | string) => {
     setIsScanning(true);
     try {
       const formData = new FormData();
-      formData.append("selfie_base64", base64Image);
+      if (imageInput instanceof File) {
+        formData.append("file", imageInput, imageInput.name);
+      } else if (imageInput instanceof Blob) {
+        formData.append("file", imageInput, "selfie.jpg");
+      } else {
+        formData.append("selfie_base64", imageInput);
+      }
       formData.append("consent", "true");
 
       const res = await api.selfieSearch(slug, formData);
@@ -180,6 +203,7 @@ export default function SelfieCapturePage() {
   const handleRetake = () => {
     setCapturedPreview(null);
     setSearchResult(null);
+    setUploadedFile(null);
     setUploadedFilePreview(null);
     if (activeTab === "camera") {
       startCamera();

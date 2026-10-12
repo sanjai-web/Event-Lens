@@ -16,6 +16,10 @@ from app.core.r2 import r2_storage
 from app.api.v1.router import api_router
 from app.workers.face_worker import run_worker_loop
 
+# Allow up to 25MB for multipart form fields (e.g. large base64 selfies)
+import starlette.formparsers
+starlette.formparsers.MultiPartParser.max_part_size = 25 * 1024 * 1024
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,

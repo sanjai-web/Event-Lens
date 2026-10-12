@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     
     # AI / Face Embedding Settings
     FACE_MODEL_VERSION: str = "arcface_r50_v1"
-    FACE_SIMILARITY_THRESHOLD: float = 0.60 # Cosine similarity >= 0.60 (or distance <= 0.40)
+    FACE_SIMILARITY_THRESHOLD: float = 0.40 # Cosine similarity >= 0.40 for ArcFace
     FACE_DETECTION_CONFIDENCE: float = 0.65
     
     # Razorpay Payments (Sample Test Mode Keys)

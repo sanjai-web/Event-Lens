@@ -67,27 +67,6 @@ async def process_single_photo_job(job: JobQueue, db):
         except Exception as e:
             logger.warning(f"Error processing real image variants: {e}")
 
-    # Fallback if no faces were processed from bytes
-    if not embeddings_created:
-        import hashlib
-        seed_str = f"{photo_id}_{photo.r2_key_original}"
-        h = hashlib.sha256(seed_str.encode()).digest()
-        face_count = 1 if h[0] % 2 == 0 else 2
-        for i in range(face_count):
-            rng = np.random.RandomState(int.from_bytes(h[i*4:(i+1)*4], "big"))
-            raw_vec = rng.randn(512).astype(np.float32)
-            norm_vec = raw_vec / np.linalg.norm(raw_vec)
-            embedding_record = FaceEmbedding(
-                photo_id=photo.id,
-                event_id=event_id,
-                model_version=settings.FACE_MODEL_VERSION,
-                embedding=norm_vec.tolist(),
-                bbox={"x": 100 * (i+1), "y": 80, "w": 180, "h": 180, "confidence": 0.96},
-                landmarks={"left_eye": [140, 130], "right_eye": [220, 130], "nose": [180, 170]}
-            )
-            db.add(embedding_record)
-            embeddings_created.append(norm_vec)
-
     photo.face_processed = True
     photo.face_count = face_count
 

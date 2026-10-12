@@ -26,3 +26,9 @@ dist/
 .DS_Store
 Thumbs.db
 .pytest_cache/
+
+# Local model weights & uploads
+backend/weights/
+backend/uploads/
+uploads/
+weights/
