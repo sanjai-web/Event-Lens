@@ -76,6 +76,7 @@ async def init_db():
                 logger.warning(f"Note on PostgreSQL extension setup: {e}")
 
         logger.info(f"Migrating EventLens tables to {dialect_name.upper()}...")
+        import app.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
 
         if dialect_name == "postgresql":
