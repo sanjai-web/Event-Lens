@@ -20,6 +20,7 @@ from app.models.face_embedding import FaceEmbedding
 from app.services.face_service import face_service
 from app.services.whatsapp_service import whatsapp_service
 from app.core.config import settings
+from app.core.r2 import r2_storage
 
 logger = logging.getLogger(__name__)
 

@@ -81,6 +81,18 @@ class R2StorageService:
         if self.is_configured and self.public_url:
             return f"{self.public_url}/{key}"
         # Local folder serving via FastAPI StaticFiles
+        # If the requested variant (thumb or web) does not exist on disk yet,
+        # fall back to the original uploaded photo so images are never broken!
+        if not self.is_configured:
+            dest = self._get_local_path(key)
+            if not os.path.exists(dest):
+                if "/thumbs/" in key or "/web/" in key:
+                    orig_base = key.replace("/thumbs/", "/originals/").replace("/web/", "/originals/")
+                    orig_prefix = os.path.splitext(orig_base)[0]
+                    for ext in [".jpg", ".jpeg", ".png", ".webp", ".JPG", ".JPEG", ".PNG"]:
+                        test_k = orig_prefix + ext
+                        if os.path.exists(self._get_local_path(test_k)):
+                            return f"http://localhost:8000/media/{test_k}"
         return f"http://localhost:8000/media/{key}"
 
     def upload_bytes(self, key: str, data: bytes, content_type: str = "image/webp") -> bool:
