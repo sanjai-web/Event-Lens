@@ -8,14 +8,13 @@ import {
   ArrowLeft,
   RefreshCw,
   Sparkles,
-  ShieldCheck,
-  CheckCircle2,
-  AlertCircle,
-  Eye,
-  Download,
+  UploadCloud,
+  ImageIcon,
   X,
   MessageSquare,
-  Zap,
+  Download,
+  AlertCircle,
+  FileImage,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -26,11 +25,20 @@ export default function SelfieCapturePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Mode: Live Camera vs Upload from Device / Gallery
+  const [activeTab, setActiveTab] = useState<"camera" | "upload">("camera");
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [consentShake, setConsentShake] = useState(false);
+
+  // File upload state
+  const [uploadedFilePreview, setUploadedFilePreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [isScanning, setIsScanning] = useState(false);
   const [searchResult, setSearchResult] = useState<any | null>(null);
@@ -38,11 +46,13 @@ export default function SelfieCapturePage() {
   const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
 
   useEffect(() => {
-    startCamera();
+    if (activeTab === "camera") {
+      startCamera();
+    }
     return () => {
       stopCamera();
     };
-  }, []);
+  }, [activeTab]);
 
   const startCamera = async () => {
     try {
@@ -62,7 +72,7 @@ export default function SelfieCapturePage() {
       setCameraActive(true);
     } catch (err: any) {
       console.error("Camera access error:", err);
-      setCameraError("Camera permission denied or not found. You can upload a selfie directly from your device instead.");
+      setCameraError("Camera unavailable or permission denied. You can upload a photo from your device instead.");
       setCameraActive(false);
     }
   };
@@ -74,9 +84,16 @@ export default function SelfieCapturePage() {
     }
   };
 
+  const switchTab = (tab: "camera" | "upload") => {
+    setActiveTab(tab);
+    if (tab === "upload") {
+      stopCamera();
+    }
+  };
+
   const handleCapture = async () => {
     if (!consentGiven) {
-      alert("Please accept the biometric privacy consent before continuing.");
+      triggerConsentAlert();
       return;
     }
 
@@ -95,27 +112,49 @@ export default function SelfieCapturePage() {
     setCapturedPreview(base64Data);
     stopCamera();
 
-    // Perform face search
     await performSearch(base64Data);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!consentGiven) {
-      alert("Please accept the biometric privacy consent checkbox before selecting a photo.");
-      return;
-    }
-
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       const b64 = event.target?.result as string;
-      setCapturedPreview(b64);
-      stopCamera();
-      await performSearch(b64);
+      setUploadedFilePreview(b64);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const b64 = event.target?.result as string;
+        setUploadedFilePreview(b64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSearchWithUploadedPhoto = async () => {
+    if (!consentGiven) {
+      triggerConsentAlert();
+      return;
+    }
+    if (!uploadedFilePreview) return;
+
+    setCapturedPreview(uploadedFilePreview);
+    await performSearch(uploadedFilePreview);
+  };
+
+  const triggerConsentAlert = () => {
+    setConsentShake(true);
+    setTimeout(() => setConsentShake(false), 2000);
   };
 
   const performSearch = async (base64Image: string) => {
@@ -141,7 +180,10 @@ export default function SelfieCapturePage() {
   const handleRetake = () => {
     setCapturedPreview(null);
     setSearchResult(null);
-    startCamera();
+    setUploadedFilePreview(null);
+    if (activeTab === "camera") {
+      startCamera();
+    }
   };
 
   return (
@@ -153,7 +195,7 @@ export default function SelfieCapturePage() {
         {/* Back Link */}
         <Link
           href={`/e/${slug}`}
-          className="inline-flex items-center gap-2 text-xs font-mono font-medium text-amber-800 hover:text-amber-950 bg-amber-50 px-3.5 py-1.5 rounded-full border border-amber-200/60 mb-6"
+          className="inline-flex items-center gap-2 text-xs font-mono font-medium text-amber-800 hover:text-amber-950 bg-amber-50 px-3.5 py-1.5 rounded-full border border-amber-200/60 mb-6 transition-colors shadow-2xs"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Event Gallery</span>
@@ -162,7 +204,7 @@ export default function SelfieCapturePage() {
         {/* Viewfinder Card */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-amber-200/80 shadow-xl shadow-amber-950/5 text-center">
           {!searchResult && (
-            <div className="mb-6">
+            <div className="mb-5">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-widest uppercase bg-amber-100 text-amber-900 border border-amber-300 font-semibold mb-2">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                 AI Facial Recognition
@@ -171,14 +213,44 @@ export default function SelfieCapturePage() {
                 Find Your Moments
               </h1>
               <p className="text-xs text-[#786E65] mt-1 leading-relaxed">
-                Take a quick selfie. Our ArcFace 512-dim engine finds every frame you appear in within 50ms.
+                Take a selfie or choose a photo. Our ArcFace 512-dim engine finds every frame you appear in within 50ms.
               </p>
             </div>
           )}
 
-          {/* Camera Viewfinder */}
+          {/* Mode Switch Tabs (Camera vs Upload) */}
           {!capturedPreview && !searchResult && (
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-[#14100C] flex items-center justify-center mb-6 shadow-inner border border-amber-300/40">
+            <div className="flex p-1 bg-amber-50/80 rounded-2xl border border-amber-200/80 mb-5">
+              <button
+                type="button"
+                onClick={() => switchTab("camera")}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                  activeTab === "camera"
+                    ? "bg-white text-amber-950 shadow-sm border border-amber-200/60 font-bold"
+                    : "text-[#786E65] hover:text-[#1A120B]"
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span>Live Camera</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab("upload")}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                  activeTab === "upload"
+                    ? "bg-white text-amber-950 shadow-sm border border-amber-200/60 font-bold"
+                    : "text-[#786E65] hover:text-[#1A120B]"
+                }`}
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Upload Photo</span>
+              </button>
+            </div>
+          )}
+
+          {/* CAMERA MODE VIEWFINDER */}
+          {!capturedPreview && !searchResult && activeTab === "camera" && (
+            <div className="relative aspect-square rounded-2xl overflow-hidden bg-[#14100C] flex items-center justify-center mb-5 shadow-inner border border-amber-300/40">
               {cameraActive ? (
                 <>
                   <video
@@ -196,14 +268,93 @@ export default function SelfieCapturePage() {
               ) : (
                 <div className="p-6 text-white text-center">
                   <Camera className="w-12 h-12 text-amber-400/60 mx-auto mb-3" />
-                  <p className="text-xs text-stone-300">{cameraError || "Initializing camera..."}</p>
+                  <p className="text-xs text-stone-300 mb-3">{cameraError || "Initializing camera..."}</p>
+                  <button
+                    type="button"
+                    onClick={() => switchTab("upload")}
+                    className="text-xs text-amber-300 underline font-semibold hover:text-amber-200"
+                  >
+                    Switch to photo upload instead
+                  </button>
                 </div>
               )}
               <canvas ref={canvasRef} className="hidden" />
             </div>
           )}
 
-          {/* Scanning Animation */}
+          {/* UPLOAD MODE DROPZONE & PREVIEW */}
+          {!capturedPreview && !searchResult && activeTab === "upload" && (
+            <div className="mb-5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              {uploadedFilePreview ? (
+                <div className="relative aspect-square rounded-2xl overflow-hidden bg-amber-50 border-2 border-amber-300 shadow-sm flex items-center justify-center group">
+                  <img
+                    src={uploadedFilePreview}
+                    alt="Selected photo"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedFilePreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors shadow-md"
+                    title="Remove and choose another photo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <div className="absolute bottom-3 left-3 right-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[11px] font-semibold text-white bg-black/60 hover:bg-black/80 px-3 py-1 rounded-full backdrop-blur-xs transition-colors"
+                    >
+                      Change Photo
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-6 cursor-pointer transition-all ${
+                    isDragging
+                      ? "border-amber-600 bg-amber-100/50 scale-[0.99]"
+                      : "border-amber-300 bg-amber-50/50 hover:bg-amber-100/40 hover:border-amber-400"
+                  }`}
+                >
+                  <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mb-3 shadow-inner">
+                    <ImageIcon className="w-8 h-8" />
+                  </div>
+                  <h3 className="font-semibold text-sm text-[#1A120B]">
+                    Choose a Photo from Device
+                  </h3>
+                  <p className="text-[11px] text-[#786E65] mt-1 max-w-[220px] leading-relaxed">
+                    Click to browse or drag and drop a selfie/photo containing your face
+                  </p>
+                  <span className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold bg-white text-amber-800 border border-amber-200 shadow-2xs">
+                    <FileImage className="w-3 h-3 text-amber-600" />
+                    JPG, PNG, WebP or HEIC
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SCANNING ANIMATION */}
           {isScanning && (
             <div className="py-12 text-center">
               <div className="relative w-24 h-24 mx-auto mb-6">
@@ -223,51 +374,58 @@ export default function SelfieCapturePage() {
             </div>
           )}
 
-          {/* Camera Controls & Consent */}
+          {/* CONTROLS & CONSENT */}
           {!capturedPreview && !isScanning && (
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               {/* DPDP Consent */}
-              <label className="flex items-start gap-2.5 text-left cursor-pointer p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80">
+              <label
+                className={`flex items-start gap-2.5 cursor-pointer p-3.5 rounded-2xl transition-all border ${
+                  consentShake
+                    ? "bg-rose-50 border-rose-300 ring-2 ring-rose-400/30"
+                    : "bg-amber-50/60 border-amber-200/80 hover:border-amber-300"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={consentGiven}
-                  onChange={(e) => setConsentGiven(e.target.checked)}
-                  className="mt-0.5 rounded text-amber-600 focus:ring-amber-500"
+                  onChange={(e) => {
+                    setConsentGiven(e.target.checked);
+                    if (e.target.checked) setConsentShake(false);
+                  }}
+                  className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
                 />
                 <span className="text-[11px] text-[#5A4F44] leading-snug">
                   I consent to temporary biometric facial embedding extraction solely for photo retrieval. Data is automatically destroyed in accordance with India&apos;s DPDP Act 2023.
                 </span>
               </label>
 
-              {cameraActive ? (
+              {/* Action Button: Live Capture OR Search with Uploaded Photo */}
+              {activeTab === "camera" && cameraActive && (
                 <button
                   type="button"
                   onClick={handleCapture}
-                  disabled={!consentGiven}
-                  className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:shadow-xl hover:shadow-amber-600/30 disabled:opacity-50 text-white font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-amber-950/15"
+                  className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:shadow-xl hover:shadow-amber-600/30 text-white font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-amber-950/15 cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
                   <span>Capture Selfie &amp; Search</span>
                 </button>
-              ) : null}
+              )}
 
-              {/* Upload alternative */}
-              <div className="pt-2 border-t border-amber-100">
-                <label className={`text-xs font-semibold ${consentGiven ? "text-amber-800 hover:text-amber-950 cursor-pointer" : "text-stone-400 cursor-not-allowed"} block py-1`}>
-                  <span>Or upload a photo from your gallery</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={!consentGiven}
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+              {activeTab === "upload" && (
+                <button
+                  type="button"
+                  onClick={handleSearchWithUploadedPhoto}
+                  disabled={!uploadedFilePreview}
+                  className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:shadow-xl hover:shadow-amber-600/30 disabled:opacity-50 text-white font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-amber-950/15 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{uploadedFilePreview ? "Search with this Photo" : "Select a Photo First"}</span>
+                </button>
+              )}
             </div>
           )}
 
-          {/* Results View */}
+          {/* RESULTS VIEW */}
           {searchResult && !isScanning && (
             <div>
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-amber-100">
@@ -281,10 +439,10 @@ export default function SelfieCapturePage() {
                 </div>
                 <button
                   onClick={handleRetake}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-medium transition-colors border border-amber-200"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-medium transition-colors border border-amber-200 shadow-2xs"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Retake</span>
+                  <span>Try Another Photo</span>
                 </button>
               </div>
 
@@ -333,7 +491,7 @@ export default function SelfieCapturePage() {
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <button
             onClick={() => setSelectedPhoto(null)}
-            className="absolute top-5 right-5 p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+            className="absolute top-5 right-5 p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>
