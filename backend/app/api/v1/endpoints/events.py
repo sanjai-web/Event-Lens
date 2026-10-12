@@ -36,7 +36,7 @@ async def create_event(
     qr_data_url = qr_service.generate_event_qr_base64(public_url, req.name)
 
     # In development or if Razorpay keys not set, auto-activate as LIVE
-    initial_status = EventStatus.LIVE if not settings.RAZORPAY_KEY_ID else EventStatus.CREATED
+    initial_status = EventStatus.LIVE if (settings.ENVIRONMENT == "development" or not settings.RAZORPAY_KEY_ID) else EventStatus.CREATED
 
     event = Event(
         photographer_id=current_user.id,

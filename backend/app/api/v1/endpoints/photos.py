@@ -36,10 +36,14 @@ async def get_presigned_upload_urls(
 
     # Strictly require event to be LIVE (payment completed)
     if event.status != EventStatus.LIVE:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Cannot upload photos. Event is '{event.status.value}'. Payment is required to activate event uploads."
-        )
+        if settings.ENVIRONMENT == "development":
+            event.status = EventStatus.LIVE
+            await db.commit()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Cannot upload photos. Event is '{event.status.value}'. Payment is required to activate event uploads."
+            )
 
     # Calculate total size of incoming batch in MB
     incoming_bytes = sum(f.size_bytes for f in req.files)
@@ -84,10 +88,14 @@ async def confirm_uploaded_photos(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     if event.status != EventStatus.LIVE:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Cannot confirm photos. Event is '{event.status.value}'. Payment required."
-        )
+        if settings.ENVIRONMENT == "development":
+            event.status = EventStatus.LIVE
+            await db.commit()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Cannot confirm photos. Event is '{event.status.value}'. Payment required."
+            )
 
     total_added_bytes = 0
     created_photos = []
